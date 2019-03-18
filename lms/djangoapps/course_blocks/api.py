@@ -16,6 +16,8 @@ from .transformers import (
     load_override_data,
 )
 from .usage_info import CourseUsageInfo
+from edx_when import field_data
+
 
 INDIVIDUAL_STUDENT_OVERRIDE_PROVIDER = (
     'lms.djangoapps.courseware.student_field_overrides.IndividualStudentOverrideProvider'
@@ -46,6 +48,7 @@ def get_course_block_access_transformers(user):
         ContentTypeGateTransformer(),
         user_partitions.UserPartitionTransformer(),
         visibility.VisibilityTransformer(),
+        field_data.DateOverrideTransformer(user),
     ]
 
     if has_individual_student_override_provider():

@@ -1,6 +1,7 @@
 """
 Tests for views/tools.py.
 """
+from __future__ import absolute_import, unicode_literals
 
 import datetime
 import json
@@ -20,8 +21,12 @@ from lms.djangoapps.courseware.field_overrides import OverrideFieldData
 from lms.djangoapps.ccx.tests.test_overrides import inject_field_overrides
 from student.tests.factories import UserFactory
 from xmodule.fields import Date
+from xmodule.modulestore.django import SignalHandler
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
+
+from edx_when import signals
+from edx_when.field_data import DateLookupFieldData
 
 from ..views import tools
 
@@ -191,10 +196,13 @@ class TestTitleOrUrl(unittest.TestCase):
         self.assertEquals(tools.title_or_url(unit), u'test:hello')
 
 
-@override_settings(
-    FIELD_OVERRIDE_PROVIDERS=(
-        'lms.djangoapps.courseware.student_field_overrides.IndividualStudentOverrideProvider',),
-)
+def inject_field_data(blocks, course, user):
+    use_cached = False
+    for block in blocks:
+        block._field_data = DateLookupFieldData(block._field_data, course.id, user, use_cached=use_cached)   # pylint: disable=protected-access
+        use_cached = True
+
+
 class TestSetDueDateExtension(ModuleStoreTestCase):
     """
     Test the set_due_date_extensions function.
@@ -212,6 +220,7 @@ class TestSetDueDateExtension(ModuleStoreTestCase):
         week3 = ItemFactory.create(parent=course)
         homework = ItemFactory.create(parent=week1)
         assignment = ItemFactory.create(parent=homework, due=due)
+        signals.extract_dates(None, course.id)
 
         user = UserFactory.create()
 
@@ -223,7 +232,7 @@ class TestSetDueDateExtension(ModuleStoreTestCase):
         self.week3 = week3
         self.user = user
 
-        inject_field_overrides((course, week1, week2, week3, homework, assignment), course, user)
+        inject_field_data((course, week1, week2, week3, homework, assignment), course, user)
 
     def tearDown(self):
         super(TestSetDueDateExtension, self).tearDown()
@@ -237,21 +246,17 @@ class TestSetDueDateExtension(ModuleStoreTestCase):
         """
         for block in (self.week1, self.week2, self.week3,
                       self.homework, self.assignment):
+            block._field_data._load_dates(self.course.id, self.user, use_cached=False)
             block.fields['due']._del_cached_value(block)  # pylint: disable=protected-access
 
     def test_set_due_date_extension(self):
         extended = datetime.datetime(2013, 12, 25, 0, 0, tzinfo=UTC)
         tools.set_due_date_extension(self.course, self.week1, self.user, extended)
+        tools.set_due_date_extension(self.course, self.assignment, self.user, extended)
         self._clear_field_data_cache()
         self.assertEqual(self.week1.due, extended)
         self.assertEqual(self.homework.due, extended)
         self.assertEqual(self.assignment.due, extended)
-
-    def test_set_due_date_extension_num_queries(self):
-        extended = datetime.datetime(2013, 12, 25, 0, 0, tzinfo=UTC)
-        with self.assertNumQueries(5):
-            tools.set_due_date_extension(self.course, self.week1, self.user, extended)
-            self._clear_field_data_cache()
 
     def test_set_due_date_extension_invalid_date(self):
         extended = datetime.datetime(2009, 1, 1, 0, 0, tzinfo=UTC)
@@ -299,6 +304,7 @@ class TestDataDumps(ModuleStoreTestCase):
         self.week2 = week2
         self.user1 = user1
         self.user2 = user2
+        signals.extract_dates(None, course.id)
 
     def test_dump_module_extensions(self):
         extended = datetime.datetime(2013, 12, 25, 0, 0, tzinfo=UTC)
@@ -307,12 +313,12 @@ class TestDataDumps(ModuleStoreTestCase):
         tools.set_due_date_extension(self.course, self.week1, self.user2,
                                      extended)
         report = tools.dump_module_extensions(self.course, self.week1)
-        self.assertEqual(
-            report['title'], u'Users with due date extensions for ' +
+        assert (
+            report['title'] == 'Users with due date extensions for ' +
             self.week1.display_name)
-        self.assertEqual(
-            report['header'], ["Username", "Full Name", "Extended Due Date"])
-        self.assertEqual(report['data'], [
+        assert (
+            report['header'] == ["Username", "Full Name", "Extended Due Date"])
+        assert (report['data'] == [
             {"Username": self.user1.username,
              "Full Name": self.user1.profile.name,
              "Extended Due Date": "2013-12-25 00:00"},
@@ -327,12 +333,12 @@ class TestDataDumps(ModuleStoreTestCase):
         tools.set_due_date_extension(self.course, self.week2, self.user1,
                                      extended)
         report = tools.dump_student_extensions(self.course, self.user1)
-        self.assertEqual(
-            report['title'], u'Due date extensions for %s (%s)' %
+        assert (
+            report['title'] == 'Due date extensions for %s (%s)' %
             (self.user1.profile.name, self.user1.username))
-        self.assertEqual(
-            report['header'], ["Unit", "Extended Due Date"])
-        self.assertEqual(report['data'], [
+        assert (
+            report['header'] == ["Unit", "Extended Due Date"])
+        assert (report['data'] == [
             {"Unit": self.week1.display_name,
              "Extended Due Date": "2013-12-25 00:00"},
             {"Unit": self.week2.display_name,

@@ -94,6 +94,8 @@ from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.x_module import XModuleDescriptor
 
+from edx_when.field_data import DateLookupFieldData
+
 
 log = logging.getLogger(__name__)
 
@@ -162,7 +164,6 @@ def toc_for_course(user, request, course, active_chapter, active_section, field_
 
     field_data_cache must include data from the course module and 2 levels of its descendants
     '''
-
     with modulestore().bulk_operations(course.id):
         course_module = get_module_for_descriptor(
             user, request, course, field_data_cache, course.id, course=course
@@ -672,6 +673,7 @@ def get_module_system_for_user(
             inner_system,
             real_user.id,
             [
+                partial(DateLookupFieldData, course_id=course.id, user=user),
                 partial(OverrideFieldData.wrap, real_user, course),
                 partial(LmsFieldData, student_data=inner_student_data),
             ],
@@ -768,6 +770,7 @@ def get_module_system_for_user(
         anonymous_student_id = anonymous_id_for_user(user, None)
 
     field_data = LmsFieldData(descriptor._field_data, student_data)  # pylint: disable=protected-access
+    field_data = DateLookupFieldData(field_data, course_id, user)
 
     user_is_staff = bool(has_access(user, u'staff', descriptor.location, course_id))
 
@@ -890,6 +893,7 @@ def get_module_for_descriptor_internal(user, descriptor, student_data, course_id
         system,
         user.id,
         [
+            partial(DateLookupFieldData, course_id=course.id, user=user),
             partial(OverrideFieldData.wrap, user, course),
             partial(LmsFieldData, student_data=student_data),
         ],
