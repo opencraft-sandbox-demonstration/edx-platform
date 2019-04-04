@@ -1,4 +1,5 @@
 """ User Authn related Exceptions. """
+import bleach
 
 
 class AuthFailedError(Exception):
@@ -8,7 +9,7 @@ class AuthFailedError(Exception):
     """
     def __init__(self, value=None, redirect=None, redirect_url=None):
         super(AuthFailedError, self).__init__()
-        self.value = value
+        self.value = self.sanitize_value(value)
         self.redirect = redirect
         self.redirect_url = redirect_url
 
@@ -20,3 +21,11 @@ class AuthFailedError(Exception):
                 resp[attr] = self.__getattribute__(attr)
 
         return resp
+
+    def sanitize_value(self, value):
+        """ Sanitize error message for safe embed on login page."""
+        output = bleach.clean(
+            value, tags=['a', 'p', 'br', 'strong', 'b', 'span']
+        )
+
+        return output
