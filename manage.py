@@ -95,6 +95,8 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    # Explicitly print all django arguments
+    print(django_args)
     edx_args, django_args = parse_args()
 
     edx_args_base = edx_args.settings_base.replace('/', '.') + '.'
