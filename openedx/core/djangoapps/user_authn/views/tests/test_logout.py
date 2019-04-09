@@ -2,6 +2,7 @@
 Tests for logout
 """
 import unittest
+import urllib
 
 import ddt
 from django.conf import settings
@@ -61,16 +62,19 @@ class LogoutTests(TestCase):
         self.assertListEqual(self.client.session[AUTHORIZED_CLIENTS_SESSION_KEY], [oauth_client.client_id])
 
     @ddt.data(
-        ('/courses', 'testserver'),
-        ('https://edx.org/courses', 'edx.org'),
-        ('https://test.edx.org/courses', 'edx.org'),
+        (True, '/courses', 'testserver'),
+        (True, 'https://edx.org/courses', 'edx.org'),
+        (True, 'https://test.edx.org/courses', 'edx.org'),
+        (True, '/courses/course-v1:ARTS+D1+2018_T/course/', 'edx.org'),
+        (False, '/courses/course-v1:ARTS+D1+2018_T/course/', 'edx.org'),
+        (False, '/enterprise/c5dad9a7-741c-4841-868f-850aca3ff848/course/Microsoft+DAT206x/enroll/', 'edx.org'),
     )
     @ddt.unpack
     @override_settings(LOGIN_REDIRECT_WHITELIST=['test.edx.org'])
-    def test_logout_redirect_success(self, redirect_url, host):
+    def test_logout_redirect_success(self, encode, redirect_url, host):
         url = '{logout_path}?redirect_url={redirect_url}'.format(
             logout_path=reverse('logout'),
-            redirect_url=redirect_url
+            redirect_url=urllib.quote(redirect_url) if encode else redirect_url
         )
         response = self.client.get(url, HTTP_HOST=host)
         expected = {
